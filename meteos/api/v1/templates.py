@@ -16,13 +16,7 @@
 
 """The templates api."""
 
-import ast
-import re
-import string
-
 from oslo_log import log
-from oslo_utils import strutils
-from oslo_utils import uuidutils
 import six
 import webob
 from webob import exc
@@ -30,9 +24,8 @@ from webob import exc
 from meteos.api import common
 from meteos.api.openstack import wsgi
 from meteos.api.views import templates as template_views
-from meteos import exception
-from meteos.i18n import _, _LI
 from meteos import engine
+from meteos import exception
 
 LOG = log.getLogger(__name__)
 
@@ -62,7 +55,7 @@ class TemplateController(wsgi.Controller, wsgi.AdminActionsMixin):
         """Delete a template."""
         context = req.environ['meteos.context']
 
-        LOG.info(_LI("Delete template with id: %s"), id, context=context)
+        LOG.info("Delete template with id: %s", id, context=context)
 
         try:
             self.engine_api.delete_template(context, id)

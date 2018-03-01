@@ -30,11 +30,7 @@ from oslo_config import cfg
 from oslo_log import log
 from oslo_middleware import cors
 from oslo_utils import netutils
-import six
 
-from meteos.common import constants
-from meteos import exception
-from meteos.i18n import _
 
 CONF = cfg.CONF
 log.register_options(CONF)
@@ -152,27 +148,25 @@ CONF.register_opts(global_opts)
 
 def set_middleware_defaults():
     """Update default configuration options for oslo.middleware."""
-    # CORS Defaults
-    # TODO(krotscheck): Update with https://review.openstack.org/#/c/285368/
-    cfg.set_defaults(cors.CORS_OPTS,
-                     allow_headers=['X-Auth-Token',
-                                    'X-OpenStack-Request-ID',
-                                    'X-Openstack-Meteos-Api-Version',
-                                    'X-OpenStack-Meteos-API-Experimental',
-                                    'X-Identity-Status',
-                                    'X-Roles',
-                                    'X-Service-Catalog',
-                                    'X-User-Id',
-                                    'X-Tenant-Id'],
-                     expose_headers=['X-Auth-Token',
-                                     'X-OpenStack-Request-ID',
-                                     'X-Openstack-Meteos-Api-Version',
-                                     'X-OpenStack-Meteos-API-Experimental',
-                                     'X-Subject-Token',
-                                     'X-Service-Token'],
-                     allow_methods=['GET',
-                                    'PUT',
-                                    'POST',
-                                    'DELETE',
-                                    'PATCH']
-                     )
+
+    cors.set_defaults(
+        allow_headers=['X-Auth-Token',
+                       'X-OpenStack-Request-ID',
+                       'X-Openstack-Meteos-Api-Version',
+                       'X-OpenStack-Meteos-API-Experimental',
+                       'X-Identity-Status',
+                       'X-Roles',
+                       'X-Service-Catalog',
+                       'X-User-Id',
+                       'X-Tenant-Id'],
+        expose_headers=['X-Auth-Token',
+                        'X-OpenStack-Request-ID',
+                        'X-Openstack-Meteos-Api-Version',
+                        'X-OpenStack-Meteos-API-Experimental',
+                        'X-Subject-Token',
+                        'X-Service-Token'],
+        allow_methods=['GET',
+                       'PUT',
+                       'POST',
+                       'DELETE',
+                       'PATCH'])

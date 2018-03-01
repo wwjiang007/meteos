@@ -17,31 +17,22 @@
 
 """Utilities and helper functions."""
 
-import contextlib
 import errno
 import functools
 import inspect
 import os
 import pyclbr
-import random
-import re
-import shutil
-import socket
 import sys
-import tempfile
 import time
 
 from eventlet import pools
-import netaddr
 from oslo_concurrency import lockutils
 from oslo_concurrency import processutils
 from oslo_config import cfg
 from oslo_log import log
 from oslo_utils import importutils
-from oslo_utils import netutils
 from oslo_utils import timeutils
 import paramiko
-import retrying
 import six
 
 from meteos.common import constants
@@ -106,10 +97,10 @@ class SSHPool(pools.Pool):
                         timeout=self.conn_timeout)
             # Paramiko by default sets the socket timeout to 0.1 seconds,
             # ignoring what we set through the sshclient. This doesn't help for
-            # keeping long lived connections. Hence we have to bypass it, by
+            # keeping long lived connections. Hence, we have to bypass it, by
             # overriding it after the transport is initialized. We are setting
             # the sockettimeout to None and setting a keepalive packet so that,
-            # the server will keep the connection open. All that does is send
+            # the server will keep the connection open. All that does is sent
             # a keepalive packet every ssh_conn_timeout seconds.
             if self.conn_timeout:
                 transport = ssh.get_transport()
@@ -151,41 +142,6 @@ class SSHPool(pools.Pool):
             self.free_items.pop(ssh)
         if self.current_size > 0:
             self.current_size -= 1
-
-
-def check_ssh_injection(cmd_list):
-    ssh_injection_pattern = ['`', '$', '|', '||', ';', '&', '&&', '>', '>>',
-                             '<']
-
-    # Check whether injection attacks exist
-    for arg in cmd_list:
-        arg = arg.strip()
-
-        # Check for matching quotes on the ends
-        is_quoted = re.match('^(?P<quote>[\'"])(?P<quoted>.*)(?P=quote)$', arg)
-        if is_quoted:
-            # Check for unescaped quotes within the quoted argument
-            quoted = is_quoted.group('quoted')
-            if quoted:
-                if (re.match('[\'"]', quoted) or
-                        re.search('[^\\\\][\'"]', quoted)):
-                    raise exception.SSHInjectionThreat(command=cmd_list)
-        else:
-            # We only allow spaces within quoted arguments, and that
-            # is the only special character allowed within quotes
-            if len(arg.split()) > 1:
-                raise exception.SSHInjectionThreat(command=cmd_list)
-
-        # Second, check whether danger character in command. So the shell
-        # special operator must be a single argument.
-        for c in ssh_injection_pattern:
-            if c not in arg:
-                continue
-
-            result = arg.find(c)
-            if not result == -1:
-                if result == 0 or not arg[result - 1] == '\\':
-                    raise exception.SSHInjectionThreat(command=cmd_list)
 
 
 class LazyPluggable(object):
@@ -285,7 +241,6 @@ def file_open(filename):
     except IOError as e:
         if e.errno != errno.ENOENT:
             raise
-        result = False
     else:
         data = fd.read()
         fd.close()
@@ -318,7 +273,7 @@ def walk_class_hierarchy(clazz, encountered=None):
     for subclass in clazz.__subclasses__():
         if subclass not in encountered:
             encountered.append(subclass)
-            # drill down to leaves first
+            # drill down to leave first
             for subsubclass in walk_class_hierarchy(subclass, encountered):
                 yield subsubclass
             yield subclass
@@ -398,3 +353,11 @@ def wait_for_access_update(context, db, learning_instance,
             raise exception.LearningMigrationFailed(reason=msg)
         else:
             time.sleep(tries ** 2)
+
+
+def is_valid_status(resource_name, status, valid_statuses):
+    if status not in valid_statuses:
+        msg = _("%(resource_name)s status must be %(valid_statuses)s") % {
+            "resource_name": resource_name,
+            "valid_statuses": valid_statuses}
+        raise exception.InvalidStatus(reason=msg)

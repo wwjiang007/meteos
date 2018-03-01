@@ -23,7 +23,6 @@ inline callbacks.
 
 import os
 import shutil
-import uuid
 
 import fixtures
 import mock
@@ -41,6 +40,7 @@ from meteos import rpc
 from meteos import service
 from meteos.tests import conf_fixture
 from meteos.tests import fake_notifier
+from oslo_utils import uuidutils
 
 test_opts = [
     cfg.StrOpt('sqlite_clean_db',
@@ -174,10 +174,10 @@ class TestCase(base_test.BaseTestCase):
     def flags(self, **kw):
         """Override flag variables for a test."""
         for k, v in kw.items():
-            CONF.set_override(k, v, enforce_type=True)
+            CONF.set_override(k, v)
 
     def start_service(self, name, host=None, **kwargs):
-        host = host and host or uuid.uuid4().hex
+        host = host and host or uuidutils.generate_uuid().hex
         kwargs.setdefault('host', host)
         kwargs.setdefault('binary', 'meteos-%s' % name)
         svc = service.Service.create(**kwargs)
@@ -212,6 +212,18 @@ class TestCase(base_test.BaseTestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         return new_val
+
+    def stub_out(self, old, new):
+        """Replace a function for the duration of the test.
+
+        Use the monkey patch fixture to replace a function for the
+        duration of a test. Useful when you want to provide fake
+        methods instead of mocks during testing.
+
+        This should be used instead of self.stubs.Set (which is based
+        on mox) going forward.
+        """
+        self.useFixture(fixtures.MonkeyPatch(old, new))
 
     # Useful assertions
     def assertDictMatch(self, d1, d2, approx_equal=False, tolerance=0.001):

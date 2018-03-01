@@ -30,7 +30,6 @@ import six
 import webob.exc
 
 from meteos.i18n import _
-from meteos.i18n import _LE
 
 LOG = log.getLogger(__name__)
 
@@ -92,9 +91,9 @@ class MeteosException(Exception):
             except Exception:
                 # kwargs doesn't match a variable in the message
                 # log the issue and the kwargs
-                LOG.exception(_LE('Exception in string format operation.'))
+                LOG.exception('Exception in string format operation.')
                 for name, value in kwargs.items():
-                    LOG.error(_LE("%(name)s: %(value)s"), {
+                    LOG.error("%(name)s: %(value)s", {
                         'name': name, 'value': value})
                 if CONF.fatal_exception_format_errors:
                     raise
@@ -148,6 +147,10 @@ class InvalidLearning(Invalid):
     message = _("Invalid learning: %(reason)s.")
 
 
+class InvalidStatus(Invalid):
+    message = _("Invalid Status: %(reason)s.")
+
+
 class NotAuthorized(MeteosException):
     message = _("Not authorized.")
     code = 403
@@ -169,11 +172,7 @@ class HostBinaryNotFound(NotFound):
 
 class MalformedRequestBody(MeteosException):
     message = _("Malformed message body: %(reason)s.")
-
-
-class NotAuthorized(MeteosException):
-    message = _("Not authorized.")
-    code = 403
+    code = 400
 
 
 class AdminRequired(NotAuthorized):

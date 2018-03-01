@@ -16,13 +16,7 @@
 
 """The learnings api."""
 
-import ast
-import re
-import string
-
 from oslo_log import log
-from oslo_utils import strutils
-from oslo_utils import uuidutils
 import six
 import webob
 from webob import exc
@@ -30,9 +24,10 @@ from webob import exc
 from meteos.api import common
 from meteos.api.openstack import wsgi
 from meteos.api.views import learnings as learning_views
-from meteos import exception
-from meteos.i18n import _, _LI
+from meteos.common import constants
 from meteos import engine
+from meteos import exception
+from meteos import utils
 
 LOG = log.getLogger(__name__)
 
@@ -62,7 +57,7 @@ class LearningController(wsgi.Controller, wsgi.AdminActionsMixin):
         """Delete a learning."""
         context = req.environ['meteos.context']
 
-        LOG.info(_LI("Delete learning with id: %s"), id, context=context)
+        LOG.info("Delete learning with id: %s", id, context=context)
 
         try:
             self.engine_api.delete_learning(context, id)
@@ -125,19 +120,29 @@ class LearningController(wsgi.Controller, wsgi.AdminActionsMixin):
 
         try:
             model = self.engine_api.get_model(context, model_id)
+            utils.is_valid_status(model.__class__.__name__,
+                                  model.status,
+                                  (constants.STATUS_AVAILABLE,
+                                   constants.STATUS_ACTIVE))
             experiment = self.engine_api.get_experiment(
                 context,
                 model.experiment_id)
+            utils.is_valid_status(experiment.__class__.__name__,
+                                  experiment.status,
+                                  constants.STATUS_AVAILABLE)
             template = self.engine_api.get_template(
                 context,
                 experiment.template_id)
         except exception.NotFound:
             raise exc.HTTPNotFound()
+        except exception.InvalidStatus:
+            raise
 
         new_learning = self.engine_api.create_learning(
             context,
             display_name,
             display_description,
+            model.status,
             model_id,
             method,
             model.model_type,

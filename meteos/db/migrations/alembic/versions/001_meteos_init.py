@@ -26,10 +26,9 @@ down_revision = None
 
 from alembic import op
 from oslo_log import log
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Text
-from sqlalchemy import Integer, MetaData, String, Table, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Text
+from sqlalchemy import Integer, MetaData, String, Table
 
-from meteos.i18n import _LE
 
 LOG = log.getLogger(__name__)
 
@@ -161,7 +160,33 @@ def upgrade():
         Column('display_name', String(length=255)),
         Column('display_description', String(length=255)),
         Column('model_type', String(length=255)),
-        Column('model_params', String(length=255)),
+        Column('model_params', Text),
+        Column('stdout', Text),
+        Column('stderr', Text),
+        mysql_engine='InnoDB',
+        mysql_charset='utf8'
+    )
+
+    model_evaluations = Table(
+        'model_evaluations', meta,
+        Column('created_at', DateTime),
+        Column('updated_at', DateTime),
+        Column('deleted_at', DateTime),
+        Column('deleted', String(length=36), default='False'),
+        Column('id', String(length=36), primary_key=True, nullable=False),
+        Column('model_id', String(length=36)),
+        Column('model_type', String(length=255)),
+        Column('source_dataset_url', String(length=255)),
+        Column('dataset_format', String(length=255)),
+        Column('user_id', String(length=255)),
+        Column('project_id', String(length=255)),
+        Column('cluster_id', String(length=36)),
+        Column('job_id', String(length=36)),
+        Column('status', String(length=255)),
+        Column('scheduled_at', DateTime),
+        Column('launched_at', DateTime),
+        Column('terminated_at', DateTime),
+        Column('display_name', String(length=255)),
         Column('stdout', Text),
         Column('stderr', Text),
         mysql_engine='InnoDB',
@@ -198,7 +223,13 @@ def upgrade():
 
     # create all tables
     # Take care on create order for those with FK dependencies
-    tables = [services, templates, learnings, experiments, data_sets, models]
+    tables = [services,
+              templates,
+              learnings,
+              experiments,
+              data_sets,
+              models,
+              model_evaluations]
 
     for table in tables:
         if not table.exists():
@@ -206,7 +237,7 @@ def upgrade():
                 table.create()
             except Exception:
                 LOG.info(repr(table))
-                LOG.exception(_LE('Exception while creating table.'))
+                LOG.exception('Exception while creating table.')
                 raise
 
     if migrate_engine.name == "mysql":

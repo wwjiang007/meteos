@@ -22,10 +22,9 @@ SQLAlchemy models for Meteos data.
 from oslo_config import cfg
 from oslo_db.sqlalchemy import models
 from oslo_log import log
-from sqlalchemy import Column, Integer, String, schema
+from sqlalchemy import Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import orm
-from sqlalchemy import ForeignKey, DateTime, Boolean, Enum, Text
+from sqlalchemy import DateTime, Boolean, Text
 
 from meteos.common import constants
 
@@ -165,7 +164,31 @@ class Model(BASE, MeteosBase):
     display_description = Column(String(255))
 
     model_type = Column(String(255))
-    model_params = Column(String(255))
+    model_params = Column(Text)
+
+    status = Column(String(255))
+    launched_at = Column(DateTime)
+
+    stdout = Column(Text)
+    stderr = Column(Text)
+
+
+class Model_Evaluation(BASE, MeteosBase):
+
+    __tablename__ = 'model_evaluations'
+    id = Column(String(36), primary_key=True)
+    model_id = Column(String(36))
+    model_type = Column(String(255))
+    source_dataset_url = Column(String(255))
+    dataset_format = Column(String(255))
+    cluster_id = Column(String(36))
+    job_id = Column(String(36))
+
+    deleted = Column(String(36), default='False')
+    user_id = Column(String(255))
+    project_id = Column(String(255))
+
+    display_name = Column(String(255))
 
     status = Column(String(255))
     launched_at = Column(DateTime)

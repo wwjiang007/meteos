@@ -39,8 +39,11 @@ class ViewBuilder(common.ViewBuilder):
                 'source_dataset_url': model.get('source_dataset_url'),
                 'name': model.get('display_name'),
                 'description': model.get('display_description'),
+                'experiment_id': model.get('experiment_id'),
                 'type': model.get('model_type'),
+                'params': model.get('model_params'),
                 'status': model.get('status'),
+                'stdout': model.get('stdout'),
                 'created_at': model.get('created_at'),
                 'links': self._get_links(request, model['id'])
             }
@@ -48,14 +51,13 @@ class ViewBuilder(common.ViewBuilder):
 
     def detail(self, request, model):
         """Detailed view of a single model."""
-        context = request.environ['meteos.context']
-
         model_dict = {
             'id': model.get('id'),
             'created_at': model.get('created_at'),
             'status': model.get('status'),
             'name': model.get('display_name'),
             'description': model.get('display_description'),
+            'experiment_id': model.get('experiment_id'),
             'user_id': model.get('user_id'),
             'project_id': model.get('project_id'),
             'type': model.get('model_type'),

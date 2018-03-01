@@ -16,13 +16,7 @@
 
 """The experiments api."""
 
-import ast
-import re
-import string
-
 from oslo_log import log
-from oslo_utils import strutils
-from oslo_utils import uuidutils
 import six
 import webob
 from webob import exc
@@ -30,9 +24,10 @@ from webob import exc
 from meteos.api import common
 from meteos.api.openstack import wsgi
 from meteos.api.views import experiments as experiment_views
-from meteos import exception
-from meteos.i18n import _, _LI
+from meteos.common import constants
 from meteos import engine
+from meteos import exception
+from meteos import utils
 
 LOG = log.getLogger(__name__)
 
@@ -62,7 +57,7 @@ class ExperimentController(wsgi.Controller, wsgi.AdminActionsMixin):
         """Delete a experiment."""
         context = req.environ['meteos.context']
 
-        LOG.info(_LI("Delete experiment with id: %s"), id, context=context)
+        LOG.info("Delete experiment with id: %s", id, context=context)
 
         try:
             self.engine_api.delete_experiment(context, id)
@@ -118,9 +113,15 @@ class ExperimentController(wsgi.Controller, wsgi.AdminActionsMixin):
         LOG.debug("Create experiment with request: %s", experiment)
 
         try:
-            self.engine_api.get_template(context, experiment['template_id'])
+            template = self.engine_api.get_template(context,
+                                                    experiment['template_id'])
+            utils.is_valid_status(template.__class__.__name__,
+                                  template.status,
+                                  constants.STATUS_AVAILABLE)
         except exception.NotFound:
             raise exc.HTTPNotFound()
+        except exception.InvalidStatus:
+            raise
 
         display_name = experiment.get('display_name')
         display_description = experiment.get('display_description')

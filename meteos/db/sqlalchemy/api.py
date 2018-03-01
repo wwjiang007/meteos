@@ -19,10 +19,8 @@
 """Implementation of SQLAlchemy backend."""
 
 import copy
-import datetime
 from functools import wraps
 import sys
-import uuid
 import warnings
 
 # NOTE(uglide): Required to override default oslo_db Query class
@@ -30,24 +28,16 @@ import meteos.db.sqlalchemy.query  # noqa
 
 from oslo_config import cfg
 from oslo_db import api as oslo_db_api
-from oslo_db import exception as db_exception
 from oslo_db import options as db_options
 from oslo_db.sqlalchemy import session
 from oslo_db.sqlalchemy import utils as db_utils
 from oslo_log import log
-from oslo_utils import timeutils
 from oslo_utils import uuidutils
-import six
-from sqlalchemy import and_
-from sqlalchemy import or_
-from sqlalchemy.orm import joinedload
-from sqlalchemy.sql.expression import true
 from sqlalchemy.sql import func
 
-from meteos.common import constants
 from meteos.db.sqlalchemy import models
 from meteos import exception
-from meteos.i18n import _, _LE, _LW
+from meteos.i18n import _
 
 CONF = cfg.CONF
 
@@ -239,19 +229,6 @@ def ensure_dict_has_id(model_dict):
     return model_dict
 
 
-def _sync_learnings(context, project_id, user_id, session):
-    (learnings, gigs) = learning_data_get_for_project(context,
-                                                      project_id,
-                                                      user_id,
-                                                      session=session)
-    return {'learnings': learnings}
-
-
-QUOTA_SYNC_FUNCTIONS = {
-    '_sync_learnings': _sync_learnings,
-}
-
-
 #
 
 
@@ -441,6 +418,8 @@ def _experiment_get_all_with_filters(context, project_id=None, filters=None,
         _experiment_get_query(context).join()
     )
 
+    query = query.filter(models.Experiment.project_id == project_id)
+
     # Apply filters
     if not filters:
         filters = {}
@@ -547,6 +526,8 @@ def _template_get_all_with_filters(context, project_id=None, filters=None,
     query = (
         _template_get_query(context).join()
     )
+
+    query = query.filter(models.Template.project_id == project_id)
 
     # Apply filters
     if not filters:
@@ -655,6 +636,8 @@ def _dataset_get_all_with_filters(context, project_id=None, filters=None,
         _dataset_get_query(context).join()
     )
 
+    query = query.filter(models.Dataset.project_id == project_id)
+
     # Apply filters
     if not filters:
         filters = {}
@@ -761,6 +744,8 @@ def _model_get_all_with_filters(context, project_id=None, filters=None,
         _model_get_query(context).join()
     )
 
+    query = query.filter(models.Model.project_id == project_id)
+
     # Apply filters
     if not filters:
         filters = {}
@@ -806,6 +791,122 @@ def model_delete(context, model_id):
     with session.begin():
         model_ref = model_get(context, model_id, session)
         model_ref.soft_delete(session=session)
+
+
+#
+
+
+def _model_evaluation_get_query(context, session=None):
+    if session is None:
+        session = get_session()
+    return model_query(context, models.Model_Evaluation, session=session)
+
+
+@require_context
+def model_evaluation_get(context, model_evaluation_id, session=None):
+    result = _model_evaluation_get_query(
+        context, session).filter_by(id=model_evaluation_id).first()
+
+    if result is None:
+        raise exception.NotFound()
+
+    return result
+
+
+@require_context
+@oslo_db_api.wrap_db_retry(max_retries=5, retry_on_deadlock=True)
+def model_evaluation_update(context, model_evaluation_id, update_values):
+    session = get_session()
+    values = copy.deepcopy(update_values)
+
+    with session.begin():
+        model_evaluation_ref = model_evaluation_get(context,
+                                                    model_evaluation_id,
+                                                    session=session)
+
+        model_evaluation_ref.update(values)
+        model_evaluation_ref.save(session=session)
+        return model_evaluation_ref
+
+
+@require_context
+def model_evaluation_create(context, model_evaluation_values):
+    values = copy.deepcopy(model_evaluation_values)
+    values = ensure_dict_has_id(values)
+
+    session = get_session()
+    model_evaluation_ref = models.Model_Evaluation()
+    model_evaluation_ref.update(values)
+
+    with session.begin():
+        model_evaluation_ref.save(session=session)
+
+        # NOTE(u_glide): Do so to prevent errors with relationships
+        return model_evaluation_get(context,
+                                    model_evaluation_ref['id'],
+                                    session=session)
+
+
+def _model_evaluation_get_all_with_filters(context, project_id=None,
+                                           filters=None, sort_key=None,
+                                           sort_dir=None):
+    if not sort_key:
+        sort_key = 'created_at'
+    if not sort_dir:
+        sort_dir = 'desc'
+    query = (
+        _model_evaluation_get_query(context).join()
+    )
+
+    query = query.filter(models.Model_Evaluation.project_id == project_id)
+
+    # Apply filters
+    if not filters:
+        filters = {}
+
+    # Apply sorting
+    if sort_dir.lower() not in ('desc', 'asc'):
+        msg = _("Wrong sorting data provided: sort key is '%(sort_key)s' "
+                "and sort direction is '%(sort_dir)s'.") % {
+                    "sort_key": sort_key, "sort_dir": sort_dir}
+        raise exception.InvalidInput(reason=msg)
+
+    def apply_sorting(model_evaluation, query):
+        sort_attr = getattr(model_evaluation, sort_key)
+        sort_method = getattr(sort_attr, sort_dir.lower())
+        return query.order_by(sort_method())
+
+    try:
+        query = apply_sorting(models.Model_Evaluation, query)
+    except AttributeError:
+        msg = _("Wrong sorting key provided - '%s'.") % sort_key
+        raise exception.InvalidInput(reason=msg)
+
+    # Returns list of model_evaluations that satisfy filters.
+    query = query.all()
+    return query
+
+
+@require_context
+def model_evaluation_get_all_by_project(context, project_id, filters=None,
+                                        sort_key=None, sort_dir=None):
+    """Returns list of model_evaluations with given project ID."""
+    query = _model_evaluation_get_all_with_filters(
+        context, project_id=project_id, filters=filters,
+        sort_key=sort_key, sort_dir=sort_dir,
+    )
+    return query
+
+
+@require_context
+def model_evaluation_delete(context, model_evaluation_id):
+    session = get_session()
+
+    with session.begin():
+        model_evaluation_ref = model_evaluation_get(context,
+                                                    model_evaluation_id,
+                                                    session)
+        model_evaluation_ref.soft_delete(session=session)
 
 
 #
@@ -867,6 +968,8 @@ def _learning_get_all_with_filters(context, project_id=None, filters=None,
     query = (
         _learning_get_query(context).join()
     )
+
+    query = query.filter(models.Learning.project_id == project_id)
 
     # Apply filters
     if not filters:

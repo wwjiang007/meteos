@@ -20,7 +20,6 @@ import webob.dec
 import webob.exc
 
 from meteos.api.openstack import wsgi
-from meteos.i18n import _LE, _LI
 from meteos import utils
 from meteos import wsgi as base_wsgi
 
@@ -41,7 +40,7 @@ class FaultWrapper(base_wsgi.Middleware):
             status, webob.exc.HTTPInternalServerError)()
 
     def _error(self, inner, req):
-        LOG.exception(_LE("Caught error: %s"), six.text_type(inner))
+        LOG.exception("Caught error: %s"), six.text_type(inner)
 
         safe = getattr(inner, 'safe', False)
         headers = getattr(inner, 'headers', None)
@@ -50,13 +49,13 @@ class FaultWrapper(base_wsgi.Middleware):
             status = 500
 
         msg_dict = dict(url=req.url, status=status)
-        LOG.info(_LI("%(url)s returned with HTTP %(status)d"), msg_dict)
+        LOG.info("%(url)s returned with HTTP %(status)d", msg_dict)
         outer = self.status_to_type(status)
         if headers:
             outer.headers = headers
         # NOTE(johannes): We leave the explanation empty here on
-        # purpose. It could possibly have sensitive information
-        # that should not be returned back to the user. See
+        # purpose. It could have sensitive information
+        # that should not be return back to the user. See
         # bugs 868360 and 874472
         # NOTE(eglynn): However, it would be over-conservative and
         # inconsistent with the EC2 API to hide every exception,

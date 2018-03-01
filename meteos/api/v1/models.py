@@ -16,13 +16,7 @@
 
 """The models api."""
 
-import ast
-import re
-import string
-
 from oslo_log import log
-from oslo_utils import strutils
-from oslo_utils import uuidutils
 import six
 import webob
 from webob import exc
@@ -30,14 +24,126 @@ from webob import exc
 from meteos.api import common
 from meteos.api.openstack import wsgi
 from meteos.api.views import models as model_views
-from meteos import exception
-from meteos.i18n import _, _LI
+from meteos.common import constants
 from meteos import engine
+from meteos import exception
+from meteos import utils
 
 LOG = log.getLogger(__name__)
 
 
-class ModelController(wsgi.Controller, wsgi.AdminActionsMixin):
+class ModelMixin(object):
+    """Mixin class for Model API Controllers."""
+
+    def _load(self, req, id, body):
+        """Load model for online prediction"""
+        context = req.environ['meteos.context']
+
+        LOG.debug("Load model with request: %s", id)
+
+        try:
+            model = self.engine_api.get_model(context, id)
+            utils.is_valid_status(model.__class__.__name__,
+                                  model.status,
+                                  constants.STATUS_AVAILABLE)
+            experiment = self.engine_api.get_experiment(
+                context, model.experiment_id)
+            template = self.engine_api.get_template(
+                context, experiment.template_id)
+        except exception.NotFound:
+            raise exc.HTTPNotFound()
+
+        self.engine_api.load_model(context,
+                                   id,
+                                   model.dataset_format,
+                                   model.model_type,
+                                   template.job_template_id,
+                                   model.experiment_id,
+                                   model.cluster_id)
+
+        return {'model': {'id': id}}
+
+    def _unload(self, req, id, body):
+        """Unload model for online prediction"""
+        context = req.environ['meteos.context']
+
+        LOG.debug("Unload model with request: %s", id)
+
+        try:
+            model = self.engine_api.get_model(context, id)
+            utils.is_valid_status(model.__class__.__name__,
+                                  model.status,
+                                  constants.STATUS_ACTIVE)
+            experiment = self.engine_api.get_experiment(
+                context, model.experiment_id)
+            template = self.engine_api.get_template(
+                context, experiment.template_id)
+        except exception.NotFound:
+            raise exc.HTTPNotFound()
+
+        self.engine_api.unload_model(context,
+                                     id,
+                                     model.dataset_format,
+                                     model.model_type,
+                                     template.job_template_id,
+                                     model.experiment_id,
+                                     model.cluster_id)
+
+        return {'model': {'id': id}}
+
+    def _recreate(self, req, id, body):
+        """Recreate model with new Dataset"""
+        context = req.environ['meteos.context']
+
+        if not self.is_valid_body(body, 'os-recreate'):
+            raise exc.HTTPUnprocessableEntity()
+
+        b_model = body['os-recreate']
+
+        LOG.debug("Recreate model with request: %s", b_model)
+
+        try:
+            model = self.engine_api.get_model(context, id)
+            utils.is_valid_status(model.__class__.__name__,
+                                  model.status,
+                                  constants.STATUS_AVAILABLE)
+            experiment = self.engine_api.get_experiment(
+                context, model.experiment_id)
+            template = self.engine_api.get_template(
+                context, experiment.template_id)
+        except exception.NotFound:
+            raise exc.HTTPNotFound()
+
+        display_name = b_model.get('display_name')
+        display_description = b_model.get('display_description')
+        source_dataset_url = b_model.get('source_dataset_url')
+        dataset_format = b_model.get('dataset_format', 'csv')
+        model_type = b_model.get('model_type')
+        model_params = b_model.get('model_params')
+        swift_tenant = b_model.get('swift_tenant')
+        swift_username = b_model.get('swift_username')
+        swift_password = b_model.get('swift_password')
+
+        new_model = self.engine_api.recreate_model(id,
+                                                   context,
+                                                   display_name,
+                                                   display_description,
+                                                   source_dataset_url,
+                                                   dataset_format,
+                                                   model_type,
+                                                   model_params,
+                                                   template.id,
+                                                   template.job_template_id,
+                                                   experiment.id,
+                                                   experiment.cluster_id,
+                                                   swift_tenant,
+                                                   swift_username,
+                                                   swift_password)
+
+        return self._view_builder.detail(req, new_model)
+
+
+class ModelController(wsgi.Controller, ModelMixin, wsgi.AdminActionsMixin):
 
     """The Models API v1 controller for the OpenStack API."""
     resource_name = 'model'
@@ -62,7 +168,7 @@ class ModelController(wsgi.Controller, wsgi.AdminActionsMixin):
         """Delete a model."""
         context = req.environ['meteos.context']
 
-        LOG.info(_LI("Delete model with id: %s"), id, context=context)
+        LOG.info("Delete model with id: %s", id, context=context)
 
         try:
             self.engine_api.delete_model(context, id)
@@ -120,10 +226,15 @@ class ModelController(wsgi.Controller, wsgi.AdminActionsMixin):
         try:
             experiment = self.engine_api.get_experiment(
                 context, model['experiment_id'])
+            utils.is_valid_status(experiment.__class__.__name__,
+                                  experiment.status,
+                                  constants.STATUS_AVAILABLE)
             template = self.engine_api.get_template(
                 context, experiment.template_id)
         except exception.NotFound:
             raise exc.HTTPNotFound()
+        except exception.InvalidStatus:
+            raise
 
         display_name = model.get('display_name')
         display_description = model.get('display_description')
@@ -152,6 +263,21 @@ class ModelController(wsgi.Controller, wsgi.AdminActionsMixin):
                                                  swift_password)
 
         return self._view_builder.detail(req, new_model)
+
+    @wsgi.action('os-load')
+    def load(self, req, id, body):
+        """Load model."""
+        return self._load(req, id, body)
+
+    @wsgi.action('os-unload')
+    def unload(self, req, id, body):
+        """Unload model."""
+        return self._unload(req, id, body)
+
+    @wsgi.action('os-recreate')
+    def recreate(self, req, id, body):
+        """Recreate model."""
+        return self._recreate(req, id, body)
 
 
 def create_resource():

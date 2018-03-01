@@ -39,6 +39,9 @@ class ViewBuilder(common.ViewBuilder):
                 'name': experiment.get('display_name'),
                 'description': experiment.get('display_description'),
                 'status': experiment.get('status'),
+                'template_id': experiment.get('template_id'),
+                'key_name': experiment.get('key_name'),
+                'management_network': experiment.get('neutron_management_network'),
                 'created_at': experiment.get('created_at'),
                 'links': self._get_links(request, experiment['id'])
             }
@@ -46,14 +49,13 @@ class ViewBuilder(common.ViewBuilder):
 
     def detail(self, request, experiment):
         """Detailed view of a single experiment."""
-        context = request.environ['meteos.context']
-
         experiment_dict = {
             'id': experiment.get('id'),
             'created_at': experiment.get('created_at'),
             'status': experiment.get('status'),
             'name': experiment.get('display_name'),
             'description': experiment.get('display_description'),
+            'template_id': experiment.get('template_id'),
             'project_id': experiment.get('project_id'),
             'user_id': experiment.get('user_id'),
             'key_name': experiment.get('key_name'),

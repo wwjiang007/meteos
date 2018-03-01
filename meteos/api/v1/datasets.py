@@ -16,13 +16,7 @@
 
 """The datasets api."""
 
-import ast
-import re
-import string
-
 from oslo_log import log
-from oslo_utils import strutils
-from oslo_utils import uuidutils
 import six
 import webob
 from webob import exc
@@ -30,9 +24,10 @@ from webob import exc
 from meteos.api import common
 from meteos.api.openstack import wsgi
 from meteos.api.views import datasets as dataset_views
-from meteos import exception
-from meteos.i18n import _, _LI
+from meteos.common import constants
 from meteos import engine
+from meteos import exception
+from meteos import utils
 
 LOG = log.getLogger(__name__)
 
@@ -62,7 +57,7 @@ class DatasetController(wsgi.Controller, wsgi.AdminActionsMixin):
         """Delete a dataset."""
         context = req.environ['meteos.context']
 
-        LOG.info(_LI("Delete dataset with id: %s"), id, context=context)
+        LOG.info("Delete dataset with id: %s", id, context=context)
 
         try:
             self.engine_api.delete_dataset(context, id)
@@ -120,10 +115,15 @@ class DatasetController(wsgi.Controller, wsgi.AdminActionsMixin):
         try:
             experiment = self.engine_api.get_experiment(
                 context, dataset['experiment_id'])
+            utils.is_valid_status(experiment.__class__.__name__,
+                                  experiment.status,
+                                  constants.STATUS_AVAILABLE)
             template = self.engine_api.get_template(
                 context, experiment.template_id)
         except exception.NotFound:
             raise exc.HTTPNotFound()
+        except exception.InvalidStatus:
+            raise
 
         display_name = dataset.get('display_name')
         display_description = dataset.get('display_description')
@@ -134,6 +134,12 @@ class DatasetController(wsgi.Controller, wsgi.AdminActionsMixin):
         swift_tenant = dataset.get('swift_tenant')
         swift_username = dataset.get('swift_username')
         swift_password = dataset.get('swift_password')
+        percent_train = dataset.get('percent_train', '0.7')
+        percent_test = dataset.get('percent_test', '0.3')
+
+        if (method == 'split'
+                and not float(percent_train) + float(percent_test) == 1.0):
+            raise exc.HTTPUnprocessableEntity()
 
         new_dataset = self.engine_api.create_dataset(context,
                                                      display_name,
@@ -147,7 +153,9 @@ class DatasetController(wsgi.Controller, wsgi.AdminActionsMixin):
                                                      experiment.cluster_id,
                                                      swift_tenant,
                                                      swift_username,
-                                                     swift_password)
+                                                     swift_password,
+                                                     percent_train,
+                                                     percent_test)
 
         return self._view_builder.detail(req, new_dataset)
 
